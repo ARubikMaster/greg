@@ -110,3 +110,31 @@ p {
     font-size: 15px;
     color: white;
 }
+
+@media (max-width: 600px) {
+    body,html {
+        overflow: auto;
+        background-color: #BB9351;
+    }
+
+    .background-box {
+        display: none;
+    }
+
+    .card {
+        position: relative;
+        top: 0;
+        left: 0;
+
+        width: 100%;
+        height: auto;
+        min-height: 100vh;
+
+        border-radius: 0;
+        box-shadow: none;
+    }
+
+    .card-content {
+        width: 85%;
+    }
+}
