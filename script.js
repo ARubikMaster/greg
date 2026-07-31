@@ -1,13 +1,11 @@
 const background = document.getElementById("background-box")
 
 document.addEventListener("mousemove", (e) => {
-    let mouseX = e.clientX;
-    let mouseY = e.clientY;
-    let width  = background.offsetWidth;
-    let height = background.offsetHeight;
+    let xRatio = (e.clientX / window.innerWidth) - 0.5;
+    let yRatio = (e.clientY / window.innerHeight) - 0.5;
 
-    let x = screen.width/2-width/2+mouseX/10;
-    let y = screen.height/2-height/2+mouseY/10;
+    let x = xRatio * 50;
+    let y = yRatio * 50;
 
     background.style.transform = `translate(${x}px, ${y}px)`;
 });
