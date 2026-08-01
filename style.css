@@ -77,8 +77,11 @@ body, html {
     font-family: "Bricolage Grotesque", sans-serif;
     font-weight: bold;
     font-size: 14px;
-    white-space: nowrap;
     box-shadow: rgba(0, 0, 0, 0.2) 0px 4px 10px;;
+
+    width: max-content;
+    max-width: 150px;
+    overflow-wrap: break-word;
 
     opacity: 0;
     transition: opacity 1.5s ease;
