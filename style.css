@@ -52,10 +52,47 @@ body, html {
     margin-top: 20px;
 }
 
+.pfp-container {
+    position: relative;
+    margin-top: 100px;
+    margin-bottom: 0;
+    padding: 0;
+}
+
 .pfp {
     border-radius: 100%;
     width: 100px;
-    margin-top: 100px;
+}
+
+.thought-bubble {
+    position: absolute;
+    bottom: 75px;
+    left: 85px;
+
+    background-color: white;
+    color: #BB9351;
+    padding: 10px 15px;
+    border-radius: 20px;
+
+    font-family: "Bricolage Grotesque", sans-serif;
+    font-weight: bold;
+    font-size: 14px;
+    white-space: nowrap;
+    box-shadow: rgba(0, 0, 0, 0.2) 0px 4px 10px;;
+
+    opacity: 0;
+    transition: opacity 1.5s ease;
+}
+
+.thought-bubble::after {
+    content: '';
+    position: absolute;
+    bottom: -10px;
+    left: 20px;
+    
+    border-width: 10px 10px 0 0;
+    border-style: solid;
+    border-color: white transparent transparent transparent;
 }
 
 .name {

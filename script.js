@@ -31,3 +31,17 @@ for (i = 0; i < coll.length; i++) {
     }
   });
 }
+
+fetch('status.txt')
+    .then(response => response.text())
+    .then(text => {
+        const bubble = document.getElementById('thought-bubble');
+        
+        if (text.trim() !== "") {
+            bubble.innerText = text;
+            bubble.style.opacity = 1;
+        }
+    })
+    .catch(error => {
+        console.log("Status file not found or couldn't be loaded.");
+    });
