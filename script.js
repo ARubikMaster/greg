@@ -32,7 +32,7 @@ for (i = 0; i < coll.length; i++) {
   });
 }
 
-fetch('status.txt')
+fetch('status.txt', { cache: 'no-store' })
     .then(response => response.text())
     .then(text => {
         const bubble = document.getElementById('thought-bubble');
