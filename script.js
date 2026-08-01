@@ -32,7 +32,9 @@ for (i = 0; i < coll.length; i++) {
   });
 }
 
-fetch('status.txt', { cache: 'no-store' })
+const timestamp = new Date().getTime();
+
+fetch('status.txt?t=${timestamp}', { cache: 'no-store' })
     .then(response => response.text())
     .then(text => {
         const bubble = document.getElementById('thought-bubble');
