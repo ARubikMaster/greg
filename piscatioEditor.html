@@ -1,0 +1,465 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Piscatio Map Editor</title>
+    <style>
+        body { display: flex; margin: 0; height: 100vh; font-family: system-ui, sans-serif; overflow: hidden; background: #1e1e1e; color: #fff; }
+        #canvas-container { flex: 1; position: relative; }
+        canvas { width: 100%; height: 100%; display: block; cursor: crosshair; }
+        #sidebar { width: 320px; background: #2d2d30; padding: 15px; overflow-y: auto; box-sizing: border-box; border-left: 1px solid #444; }
+        .panel { background: #3e3e42; padding: 10px; margin-bottom: 10px; border-radius: 4px; }
+        label { display: block; font-size: 12px; margin-top: 8px; color: #aaa; }
+        input[type="text"], input[type="number"] { width: 100%; padding: 4px; box-sizing: border-box; background: #1e1e1e; border: 1px solid #555; color: #fff; margin-top: 2px; }
+        input[type="file"] { font-size: 11px; margin-top: 5px; width: 100%; }
+        button { width: 100%; padding: 8px; margin-top: 10px; background: #007acc; border: none; color: white; cursor: pointer; border-radius: 2px; }
+        button:hover { background: #0098ff; }
+        .danger { background: #cc3333; }
+        .danger:hover { background: #ff4444; }
+        .success { background: #28a745; }
+        .success:hover { background: #218838; }
+        h3 { margin-top: 0; font-size: 16px; border-bottom: 1px solid #555; padding-bottom: 5px; margin-bottom: 10px; }
+        .help-text { font-size: 11px; color: #888; margin-top: 4px; }
+        .flex-row { display: flex; gap: 4px; margin-top: 2px; }
+        .btn-half { flex: 1; margin-top: 0; background: #444; }
+        .btn-half:hover { background: #555; }
+    </style>
+</head>
+<body>
+
+<div id="canvas-container">
+    <canvas id="view"></canvas>
+</div>
+
+<div id="sidebar">
+    <div class="panel flex-row" style="padding-top: 10px;">
+        <button class="btn-half" onclick="undo()" title="Ctrl+Z">Undo</button>
+        <button class="btn-half" onclick="redo()" title="Ctrl+Y">Redo</button>
+    </div>
+
+    <div class="panel">
+        <h3>1. Global Settings</h3>
+        <label>Asset Path</label>
+        <input type="text" id="inp-assetpath" onfocus="saveState()" oninput="mapData.assetPath = this.value">
+        
+        <label>Camera Limits (X, Y, W, H)</label>
+        <div class="flex-row">
+            <input type="number" id="inp-cam-x" onfocus="saveState()" oninput="updateCamLimit('x', this.value)" title="X">
+            <input type="number" id="inp-cam-y" onfocus="saveState()" oninput="updateCamLimit('y', this.value)" title="Y">
+            <input type="number" id="inp-cam-w" onfocus="saveState()" oninput="updateCamLimit('w', this.value)" title="Width">
+            <input type="number" id="inp-cam-h" onfocus="saveState()" oninput="updateCamLimit('h', this.value)" title="Height">
+        </div>
+    </div>
+
+    <div class="panel">
+        <h3>2. Load Textures</h3>
+        <input type="file" id="folderInput" webkitdirectory directory multiple>
+        <div class="help-text">Select your game's root or assets folder to render images.</div>
+    </div>
+
+    <div class="panel">
+        <h3>3. Map File</h3>
+        <input type="file" id="fileInput" accept=".json">
+        <button onclick="saveJSON()">Export map.json</button>
+    </div>
+
+    <div class="panel">
+        <h3>Add Objects</h3>
+        <button onclick="addMapElement()">+ Add Map Element</button>
+        <button onclick="addWaterArea()">+ Add Water Area</button>
+    </div>
+
+    <div class="panel" id="propertiesPanel" style="display: none;">
+        <h3>Properties (<span id="propType"></span>)</h3>
+        
+        <div id="prop-texture" style="display: none;">
+            <label>Texture File (e.g. grass1.png)</label>
+            <input type="text" id="inp-texture" onfocus="saveState()" oninput="updateProp('texture', this.value)">
+            <label>Z-Order</label>
+            <input type="number" id="inp-zorder" onfocus="saveState()" oninput="updateProp('z_order', parseInt(this.value))">
+            <button id="btn-add-hitbox" class="success" onclick="addHitboxToSelected()" style="display: none;">+ Add Hitbox</button>
+        </div>
+
+        <label>X Position</label>
+        <input type="number" id="inp-x" onfocus="saveState()" oninput="updateProp('x', parseInt(this.value))">
+        <label>Y Position</label>
+        <input type="number" id="inp-y" onfocus="saveState()" oninput="updateProp('y', parseInt(this.value))">
+        
+        <div id="prop-dim" style="display: none;">
+            <label>Width</label>
+            <input type="number" id="inp-w" onfocus="saveState()" oninput="updateProp('w', parseInt(this.value))">
+            <label>Height</label>
+            <input type="number" id="inp-h" onfocus="saveState()" oninput="updateProp('h', parseInt(this.value))">
+        </div>
+
+        <button class="danger" onclick="deleteSelected()" style="margin-top: 20px;">Delete Selected</button>
+    </div>
+</div>
+
+<script>
+    const canvas = document.getElementById('view');
+    const ctx = canvas.getContext('2d');
+    
+    let mapData = {
+        assetPath: "assets/art/world/",
+        cameraLimits: { x: -4500, y: -1800, w: 9000, h: 2970 },
+        mapElements: [],
+        waterAreas: []
+    };
+
+    let cam = { x: 0, y: 0, zoom: 0.1 };
+    let selected = null; 
+    let loadedImages = {}; 
+
+    // Undo / Redo System
+    let undoStack = [];
+    let redoStack = [];
+
+    function saveState() {
+        undoStack.push(JSON.stringify(mapData));
+        redoStack = []; 
+        if (undoStack.length > 100) undoStack.shift(); 
+    }
+
+    function undo() {
+        if (undoStack.length === 0) return;
+        redoStack.push(JSON.stringify(mapData));
+        mapData = JSON.parse(undoStack.pop());
+        selected = null;
+        updateGlobalUI();
+        updateSidebar();
+        render();
+    }
+
+    function redo() {
+        if (redoStack.length === 0) return;
+        undoStack.push(JSON.stringify(mapData));
+        mapData = JSON.parse(redoStack.pop());
+        selected = null;
+        updateGlobalUI();
+        updateSidebar();
+        render();
+    }
+
+    window.addEventListener('keydown', e => {
+        if (e.ctrlKey || e.metaKey) {
+            if (e.key === 'z' || e.key === 'Z') {
+                if (e.shiftKey) redo();
+                else undo();
+                e.preventDefault();
+            } else if (e.key === 'y' || e.key === 'Y') {
+                redo();
+                e.preventDefault();
+            }
+        }
+    });
+
+    function resize() {
+        canvas.width = canvas.parentElement.clientWidth;
+        canvas.height = canvas.parentElement.clientHeight;
+        render();
+    }
+    window.addEventListener('resize', resize);
+    resize();
+
+    function updateGlobalUI() {
+        document.getElementById('inp-assetpath').value = mapData.assetPath || "";
+        document.getElementById('inp-cam-x').value = mapData.cameraLimits.x || 0;
+        document.getElementById('inp-cam-y').value = mapData.cameraLimits.y || 0;
+        document.getElementById('inp-cam-w').value = mapData.cameraLimits.w || 0;
+        document.getElementById('inp-cam-h').value = mapData.cameraLimits.h || 0;
+    }
+
+    function updateCamLimit(prop, val) {
+        mapData.cameraLimits[prop] = parseInt(val) || 0;
+        render();
+    }
+
+    document.getElementById('folderInput').addEventListener('change', function(e) {
+        const files = e.target.files;
+        for (let i = 0; i < files.length; i++) {
+            let file = files[i];
+            if (file.type.match('image.*')) {
+                let img = new Image();
+                img.onload = () => render(); 
+                img.src = URL.createObjectURL(file);
+                loadedImages[file.name] = img; 
+            }
+        }
+    });
+
+    function render() {
+        ctx.fillStyle = '#1e1e1e';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        
+        ctx.save();
+        ctx.translate(canvas.width / 2, canvas.height / 2);
+        ctx.scale(cam.zoom, cam.zoom);
+        ctx.translate(-cam.x, -cam.y);
+
+        ctx.strokeStyle = '#ff0055';
+        ctx.lineWidth = 2 / cam.zoom;
+        ctx.strokeRect(mapData.cameraLimits.x, mapData.cameraLimits.y, mapData.cameraLimits.w, mapData.cameraLimits.h);
+        
+        mapData.waterAreas.forEach((w, i) => {
+            ctx.fillStyle = (selected && selected.type==='water' && selected.index===i) ? 'rgba(0, 150, 255, 0.5)' : 'rgba(0, 100, 255, 0.3)';
+            ctx.fillRect(w.x, w.y, w.w, w.h);
+            ctx.strokeStyle = '#00aaff';
+            ctx.strokeRect(w.x, w.y, w.w, w.h);
+        });
+
+        let elements = mapData.mapElements.map((e, i) => ({...e, origIndex: i}));
+        elements.sort((a, b) => (a.z_order || 0) - (b.z_order || 0));
+        
+        elements.forEach(e => {
+            let isSel = (selected && selected.type==='element' && selected.index===e.origIndex);
+            let img = loadedImages[e.texture];
+            
+            if (img) {
+                ctx.drawImage(img, e.x, e.y);
+                if (isSel) {
+                    ctx.strokeStyle = '#55aa55';
+                    ctx.lineWidth = 4 / cam.zoom;
+                    ctx.strokeRect(e.x, e.y, img.width, img.height);
+                }
+            } else {
+                ctx.fillStyle = isSel ? '#55aa55' : '#338833';
+                ctx.fillRect(e.x, e.y, 100, 100);
+                ctx.fillStyle = 'white';
+                ctx.font = (20/cam.zoom) + 'px Arial';
+                ctx.fillText(e.texture || "no_tex", e.x, e.y - 10);
+            }
+
+            if (e.hitbox) {
+                let hIsSel = (selected && selected.type==='hitbox' && selected.index===e.origIndex);
+                ctx.fillStyle = hIsSel ? 'rgba(255, 170, 0, 0.4)' : 'rgba(170, 85, 0, 0.2)';
+                ctx.fillRect(e.hitbox.x, e.hitbox.y, e.hitbox.w, e.hitbox.h);
+                ctx.strokeStyle = hIsSel ? '#ffaa00' : '#aa5500';
+                ctx.lineWidth = 2 / cam.zoom;
+                ctx.strokeRect(e.hitbox.x, e.hitbox.y, e.hitbox.w, e.hitbox.h);
+            }
+        });
+
+        ctx.restore();
+    }
+
+    let isDragging = false, dragType = 0, lastMouse = {x:0, y:0};
+    let dragStartState = null; 
+    let hasMovedDuringDrag = false;
+
+    function screenToWorld(sx, sy) {
+        return {
+            x: (sx - canvas.width / 2) / cam.zoom + cam.x,
+            y: (sy - canvas.height / 2) / cam.zoom + cam.y
+        };
+    }
+
+    canvas.addEventListener('mousedown', e => {
+        document.activeElement.blur(); 
+        
+        const wPos = screenToWorld(e.offsetX, e.offsetY);
+        lastMouse = { x: e.offsetX, y: e.offsetY };
+        
+        if (e.button === 2) { dragType = 2; return; }
+
+        selected = null; dragType = 1;
+
+        for(let i = mapData.mapElements.length-1; i >= 0; i--) {
+            let hb = mapData.mapElements[i].hitbox;
+            if (hb && wPos.x > hb.x && wPos.x < hb.x+hb.w && wPos.y > hb.y && wPos.y < hb.y+hb.h) {
+                selected = {type: 'hitbox', index: i}; break;
+            }
+        }
+        
+        if(!selected) {
+            for(let i = mapData.mapElements.length-1; i >= 0; i--) {
+                let el = mapData.mapElements[i];
+                let img = loadedImages[el.texture];
+                let ew = img ? img.width : 100;
+                let eh = img ? img.height : 100;
+                
+                if (wPos.x > el.x && wPos.x < el.x+ew && wPos.y > el.y && wPos.y < el.y+eh) {
+                    selected = {type: 'element', index: i}; break;
+                }
+            }
+        }
+        
+        if(!selected) {
+            for(let i = mapData.waterAreas.length-1; i >= 0; i--) {
+                let wa = mapData.waterAreas[i];
+                if (wPos.x > wa.x && wPos.x < wa.x+wa.w && wPos.y > wa.y && wPos.y < wa.y+wa.h) {
+                    selected = {type: 'water', index: i}; break;
+                }
+            }
+        }
+        
+        if (selected) {
+            dragStartState = JSON.stringify(mapData);
+            hasMovedDuringDrag = false;
+        }
+
+        updateSidebar();
+        render();
+    });
+
+    canvas.addEventListener('mousemove', e => {
+        let dx = e.offsetX - lastMouse.x;
+        let dy = e.offsetY - lastMouse.y;
+        lastMouse = { x: e.offsetX, y: e.offsetY };
+
+        if (dragType === 2) {
+            cam.x -= dx / cam.zoom; cam.y -= dy / cam.zoom; render();
+        } else if (dragType === 1 && selected) {
+            let wDx = dx / cam.zoom, wDy = dy / cam.zoom;
+            let target = null;
+            if (selected.type === 'element') target = mapData.mapElements[selected.index];
+            if (selected.type === 'hitbox') target = mapData.mapElements[selected.index].hitbox;
+            if (selected.type === 'water') target = mapData.waterAreas[selected.index];
+            
+            if (target) {
+                hasMovedDuringDrag = true;
+                target.x += wDx; target.y += wDy;
+                updateSidebar(); render();
+            }
+        }
+    });
+
+    window.addEventListener('mouseup', () => {
+        if (dragType === 1 && selected && hasMovedDuringDrag && dragStartState) {
+            undoStack.push(dragStartState);
+            redoStack = []; 
+        }
+        dragType = 0;
+        hasMovedDuringDrag = false;
+        dragStartState = null;
+    });
+
+    canvas.addEventListener('contextmenu', e => e.preventDefault());
+    
+    canvas.addEventListener('wheel', e => {
+        let zoomAmount = e.deltaY > 0 ? 0.9 : 1.1;
+        cam.zoom *= zoomAmount;
+        render();
+    });
+
+    function updateSidebar() {
+        const pnl = document.getElementById('propertiesPanel');
+        const btnAddHitbox = document.getElementById('btn-add-hitbox');
+        
+        if (!selected) { pnl.style.display = 'none'; return; }
+        
+        pnl.style.display = 'block';
+        document.getElementById('propType').innerText = selected.type;
+        
+        let target = null;
+        document.getElementById('prop-texture').style.display = 'none';
+        document.getElementById('prop-dim').style.display = 'none';
+        btnAddHitbox.style.display = 'none';
+
+        if (selected.type === 'element') {
+            target = mapData.mapElements[selected.index];
+            document.getElementById('prop-texture').style.display = 'block';
+            document.getElementById('inp-texture').value = target.texture || "";
+            document.getElementById('inp-zorder').value = target.z_order || 0;
+            
+            if (!target.hitbox) btnAddHitbox.style.display = 'block';
+            
+        } else if (selected.type === 'hitbox') {
+            target = mapData.mapElements[selected.index].hitbox;
+            document.getElementById('prop-dim').style.display = 'block';
+            document.getElementById('inp-w').value = Math.round(target.w);
+            document.getElementById('inp-h').value = Math.round(target.h);
+        } else if (selected.type === 'water') {
+            target = mapData.waterAreas[selected.index];
+            document.getElementById('prop-dim').style.display = 'block';
+            document.getElementById('inp-w').value = Math.round(target.w);
+            document.getElementById('inp-h').value = Math.round(target.h);
+        }
+
+        document.getElementById('inp-x').value = Math.round(target.x);
+        document.getElementById('inp-y').value = Math.round(target.y);
+    }
+
+    function updateProp(prop, val) {
+        if (!selected) return;
+        let target = null;
+        if (selected.type === 'element') target = mapData.mapElements[selected.index];
+        if (selected.type === 'hitbox') target = mapData.mapElements[selected.index].hitbox;
+        if (selected.type === 'water') target = mapData.waterAreas[selected.index];
+        if (target) target[prop] = val;
+        render();
+    }
+
+    function addMapElement() {
+        saveState();
+        mapData.mapElements.push({ x: cam.x, y: cam.y, texture: "new.png", z_order: 10, hitbox: {x: cam.x, y: cam.y, w: 100, h: 100} });
+        selected = { type: 'element', index: mapData.mapElements.length - 1 };
+        updateSidebar(); render();
+    }
+
+    function addWaterArea() {
+        saveState();
+        mapData.waterAreas.push({ x: cam.x, y: cam.y, w: 500, h: 500 });
+        selected = { type: 'water', index: mapData.waterAreas.length - 1 };
+        updateSidebar(); render();
+    }
+    
+    function addHitboxToSelected() {
+        if (selected && selected.type === 'element') {
+            saveState();
+            let target = mapData.mapElements[selected.index];
+            let img = loadedImages[target.texture];
+            // Default to image bounds if loaded, otherwise 100x100
+            let ew = img ? img.width : 100;
+            let eh = img ? img.height : 100;
+            target.hitbox = { x: target.x, y: target.y, w: ew, h: eh };
+            
+            // Switch selection to the newly created hitbox
+            selected = { type: 'hitbox', index: selected.index };
+            updateSidebar(); render();
+        }
+    }
+
+    function deleteSelected() {
+        if (!selected) return;
+        saveState();
+        if (selected.type === 'element') {
+            mapData.mapElements.splice(selected.index, 1);
+        } else if (selected.type === 'hitbox') {
+            // Delete just the hitbox property, keeping the element
+            delete mapData.mapElements[selected.index].hitbox;
+        } else if (selected.type === 'water') {
+            mapData.waterAreas.splice(selected.index, 1);
+        }
+        selected = null; updateSidebar(); render();
+    }
+
+    document.getElementById('fileInput').addEventListener('change', function(e) {
+        const file = e.target.files[0];
+        if (!file) return;
+        const reader = new FileReader();
+        reader.onload = (e) => {
+            saveState(); 
+            mapData = JSON.parse(e.target.result);
+            updateGlobalUI();
+            selected = null;
+            updateSidebar();
+            render();
+        };
+        reader.readAsText(file);
+    });
+
+    function saveJSON() {
+        let cleanData = JSON.parse(JSON.stringify(mapData));
+        const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(cleanData, null, 4));
+        const dlAnchorElem = document.createElement('a');
+        dlAnchorElem.setAttribute("href", dataStr);
+        dlAnchorElem.setAttribute("download", "map.json");
+        dlAnchorElem.click();
+    }
+
+    updateGlobalUI();
+    render();
+</script>
+</body>
+</html>
