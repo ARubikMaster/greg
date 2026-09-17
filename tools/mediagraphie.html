@@ -1,0 +1,290 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <title>Générateur de Médiagraphie</title>
+    <style>
+        body { font-family: sans-serif; margin: 20px; }
+        .champ { display: none; margin-bottom: 15px; }
+        label { display: block; font-weight: bold; margin-bottom: 3px; }
+        input { width: 100%; max-width: 400px; padding: 5px; }
+        select { padding: 5px; margin-bottom: 20px; }
+        #resultat { padding: 15px; border: 1px solid #ccc; background-color: #f9f9f9; min-height: 20px; font-family: "Times New Roman", Times, serif; }
+    </style>
+    <script>
+        function initialiser() {
+            const mois = ["janvier", "février", "mars", "avril", "mai", "juin", "juillet", "août", "septembre", "octobre", "novembre", "décembre"];
+            const d = new Date();
+            document.getElementById('date_consultation').value = d.getDate() + " " + mois[d.getMonth()] + " " + d.getFullYear();
+            
+            mettreAJourAffichage();
+        }
+
+        function mettreAJourAffichage() {
+            let type = document.getElementById('type').value;
+            let champs = document.getElementsByClassName('champ');
+            
+            // Masquer tous les champs par défaut
+            for(let i = 0; i < champs.length; i++) {
+                champs[i].style.display = 'none';
+            }
+
+            // Définir les champs à afficher selon les règles du document
+            let aAfficher = [];
+            switch(type) {
+                case "livre":
+                case "dictionnaire":
+                    aAfficher = ['nom', 'prenom', 'titre', 'ville', 'editeur', 'annee', 'pages']; 
+                    break;
+                case "article_livre":
+                    aAfficher = ['nom', 'prenom', 'titre', 'conteneur', 'ville', 'editeur', 'annee', 'pages']; 
+                    break;
+                case "periodique":
+                    aAfficher = ['nom', 'prenom', 'titre', 'conteneur', 'autre', 'annee', 'pages']; 
+                    break;
+                case "site":
+                    aAfficher = ['nom', 'prenom', 'titre', 'url', 'date_consultation']; 
+                    break;
+                case "periodique_en_ligne":
+                    aAfficher = ['nom', 'prenom', 'titre', 'conteneur', 'annee', 'url', 'date_consultation']; 
+                    break;
+                case "livre_en_ligne":
+                    aAfficher = ['nom', 'prenom', 'titre', 'ville', 'editeur', 'annee', 'pages', 'url', 'date_consultation']; 
+                    break;
+                case "audiovisuel":
+                    aAfficher = ['nom', 'prenom', 'titre', 'support', 'ville', 'editeur', 'annee', 'pages']; 
+                    break;
+                case "television":
+                    aAfficher = ['nom', 'prenom', 'titre', 'ville', 'editeur', 'annee', 'pages', 'autre']; 
+                    break;
+                case "film_en_ligne":
+                    aAfficher = ['nom', 'prenom', 'titre', 'annee', 'pages', 'editeur', 'conteneur', 'support', 'url', 'date_consultation']; 
+                    break;
+                case "wikipedia":
+                    aAfficher = ['titre', 'annee', 'url', 'date_consultation']; 
+                    break;
+                case "conference":
+                    aAfficher = ['nom', 'prenom', 'titre', 'support', 'ville', 'conteneur', 'annee']; 
+                    break;
+                case "courriel":
+                    aAfficher = ['nom', 'prenom', 'titre', 'annee', 'autre', 'url']; 
+                    break;
+                case "entrevue":
+                    aAfficher = ['nom', 'prenom', 'titre', 'ville', 'annee']; 
+                    break;
+                case "image_en_ligne":
+                case "toile":
+                    aAfficher = ['nom', 'prenom', 'titre', 'support', 'pages', 'annee', 'ville', 'editeur', 'url', 'date_consultation']; 
+                    break;
+                case "carte":
+                    aAfficher = ['nom', 'prenom', 'titre', 'conteneur', 'support', 'ville', 'editeur', 'annee', 'pages', 'url', 'date_consultation']; 
+                    break;
+                case "blogue":
+                    aAfficher = ['nom', 'prenom', 'titre', 'conteneur', 'annee', 'url', 'date_consultation']; 
+                    break;
+            }
+
+            // Afficher uniquement les champs requis
+            aAfficher.forEach(id => {
+                document.getElementById('div_' + id).style.display = 'block';
+            });
+
+            generer();
+        }
+
+        function devinerDonnees() {
+            let urlStr = document.getElementById('url').value.trim();
+            let titreInput = document.getElementById('titre');
+            
+            if (urlStr && !titreInput.value) {
+                try {
+                    let urlObj = new URL(urlStr);
+                    let chemin = urlObj.pathname.split('/').filter(Boolean).pop();
+                    if (chemin) {
+                        let texteDevine = chemin.replace(/-/g, ' ').replace(/_/g, ' ').replace(/\.[a-zA-Z0-9]+$/, '');
+                        titreInput.value = texteDevine.charAt(0).toUpperCase() + texteDevine.slice(1);
+                    } else {
+                        titreInput.value = urlObj.hostname;
+                    }
+                    generer();
+                } catch(e) {
+                    console.log("URL invalide pour la devinette automatique.");
+                }
+            }
+        }
+
+        function formaterAuteur(nom, prenom, type) {
+            if (nom && prenom) return nom.toUpperCase() + ", " + prenom + ". ";
+            if (nom) return nom.toUpperCase() + ". ";
+            if (type === 'wikipedia') return "";
+            return "[ANONYME]. ";
+        }
+
+        function generer() {
+            let type = document.getElementById('type').value;
+            let nom = document.getElementById('nom').value.trim();
+            let prenom = document.getElementById('prenom').value.trim();
+            let titre = document.getElementById('titre').value.trim();
+            let conteneur = document.getElementById('conteneur').value.trim();
+            let ville = document.getElementById('ville').value.trim();
+            let editeur = document.getElementById('editeur').value.trim();
+            let annee = document.getElementById('annee').value.trim();
+            let pages = document.getElementById('pages').value.trim();
+            let url = document.getElementById('url').value.trim();
+            let date_consultation = document.getElementById('date_consultation').value.trim();
+            let support = document.getElementById('support').value.trim();
+            let autre = document.getElementById('autre').value.trim();
+
+            let auteur = formaterAuteur(nom, prenom, type);
+            let resultat = "";
+
+            // Génération selon le type sélectionné, basé sur les champs visibles
+            switch(type) {
+                case "livre":
+                case "dictionnaire":
+                    resultat = auteur + "<i>" + titre + "</i>, " + ville + ", " + editeur + ", " + annee + ", " + pages + " p.";
+                    break;
+                case "article_livre":
+                    resultat = auteur + "« " + titre + " », <i>" + conteneur + "</i>, " + ville + ", " + editeur + ", " + annee + ", p. " + pages + ".";
+                    break;
+                case "periodique":
+                    resultat = auteur + "« " + titre + " », <i>" + conteneur + "</i>, " + (autre ? autre + ", " : "") + "(" + annee + "), p. " + pages + ".";
+                    break;
+                case "site":
+                    resultat = auteur + "<i>" + titre + "</i>, [En ligne], " + url + " (Page consultée le " + date_consultation + ")";
+                    break;
+                case "periodique_en_ligne":
+                    resultat = auteur + "« " + titre + " », <i>" + conteneur + "</i>, " + annee + ", [En ligne], " + url + " (Page consultée le " + date_consultation + ")";
+                    break;
+                case "livre_en_ligne":
+                    resultat = auteur + "<i>" + titre + "</i>, " + ville + ", " + editeur + ", " + annee + ", " + pages + " p., " + url + " (Page consultée le " + date_consultation + ")";
+                    break;
+                case "audiovisuel":
+                    resultat = auteur + "<i>" + titre + "</i>, [" + (support || "DVD") + "], " + ville + ", " + editeur + ", " + annee + ", " + pages + ".";
+                    break;
+                case "television":
+                    resultat = auteur + "<i>" + titre + "</i>, " + ville + ", " + editeur + ", " + annee + ", " + pages + ", coul. (" + autre + ").";
+                    break;
+                case "film_en_ligne":
+                    resultat = auteur + "<i>" + titre + "</i>, " + annee + ", " + pages + ", dans " + editeur + ", <i>" + conteneur + "</i>, " + support + ", " + url + " (Page consultée le " + date_consultation + ").";
+                    break;
+                case "wikipedia":
+                    resultat = "« " + titre + " », dans <i>Wikipédia</i>, " + annee + ", " + url + " (Page consultée le " + date_consultation + ").";
+                    break;
+                case "conference":
+                    resultat = auteur + "<i>" + titre + "</i>, " + support + ", " + ville + ", " + conteneur + ", " + annee + ".";
+                    break;
+                case "courriel":
+                    resultat = auteur + "<i>" + titre + "</i> (" + annee + "), courriel à " + autre + ", " + url;
+                    break;
+                case "entrevue":
+                    resultat = auteur + "<i>" + titre + "</i>, " + ville + ", " + annee + ".";
+                    break;
+                case "image_en_ligne":
+                    resultat = auteur + "<i>" + titre + "</i>, " + support + ", " + pages + ", " + annee + ", " + ville + ", " + editeur + ", " + url + " (Page consultée le " + date_consultation + ")";
+                    break;
+                case "toile":
+                    resultat = auteur + "<i>" + titre + "</i>, " + support + ", " + pages + ", " + annee + ", " + ville + ", " + editeur + (url ? ", " + url + " (Page consultée le " + date_consultation + ")" : ".");
+                    break;
+                case "carte":
+                    resultat = auteur + (url ? "« " + titre + " », <i>" + conteneur + "</i>" : "<i>" + titre + "</i>, " + support) + ", " + ville + ", " + editeur + ", " + annee + (url ? ", " + url + " (Page consultée le " + date_consultation + ")" : ", " + pages + ".");
+                    break;
+                case "blogue":
+                    resultat = auteur + "« " + titre + " » dans <i>" + conteneur + "</i>, " + annee + ", " + url + " (Page consultée le " + date_consultation + ")";
+                    break;
+            }
+
+            document.getElementById('resultat').innerHTML = resultat;
+        }
+    </script>
+</head>
+<body onload="initialiser()">
+    <h1>Générateur de Médiagraphie</h1>
+    
+    <label for="type">Type de source :</label>
+    <select id="type" onchange="mettreAJourAffichage()">
+        <option value="livre">Livre</option>
+        <option value="article_livre">Article de livre ou d'encyclopédie</option>
+        <option value="dictionnaire">Dictionnaire ou encyclopédie</option>
+        <option value="periodique">Article de journal ou de revue (papier)</option>
+        <option value="site">Site Internet</option>
+        <option value="periodique_en_ligne">Article dans un périodique en ligne</option>
+        <option value="livre_en_ligne">Livre en ligne ou document numérisé</option>
+        <option value="audiovisuel">Document audiovisuel (CD, DVD)</option>
+        <option value="television">Émission de télévision</option>
+        <option value="film_en_ligne">Film ou vidéo en ligne</option>
+        <option value="wikipedia">Page Wikipédia</option>
+        <option value="conference">Conférence</option>
+        <option value="courriel">Courriel</option>
+        <option value="entrevue">Entrevue</option>
+        <option value="image_en_ligne">Image, illustration, photographie en ligne</option>
+        <option value="toile">Toile / Toile en ligne</option>
+        <option value="carte">Carte géographique / en ligne</option>
+        <option value="blogue">Billet de blogue, forum ou réseau social</option>
+    </select>
+
+    <div id="div_nom" class="champ">
+        <label>Nom de l'auteur / Organisme :</label>
+        <input type="text" id="nom" placeholder="Ex: PAGNOL" onkeyup="generer()">
+    </div>
+
+    <div id="div_prenom" class="champ">
+        <label>Prénom de l'auteur (ou fonction) :</label>
+        <input type="text" id="prenom" placeholder="Ex: Marcel" onkeyup="generer()">
+    </div>
+
+    <div id="div_titre" class="champ">
+        <label>Titre de l'œuvre, de l'article ou de la page :</label>
+        <input type="text" id="titre" placeholder="Titre principal" onkeyup="generer()">
+    </div>
+
+    <div id="div_conteneur" class="champ">
+        <label>Titre du conteneur (Site, Revue, Blogue, Événement) :</label>
+        <input type="text" id="conteneur" placeholder="Ex: La Presse" onkeyup="generer()">
+    </div>
+
+    <div id="div_url" class="champ">
+        <label>URL / Adresse électronique :</label>
+        <input type="text" id="url" placeholder="http://..." onkeyup="generer()" onblur="devinerDonnees()">
+    </div>
+
+    <div id="div_date_consultation" class="champ">
+        <label>Date de consultation :</label>
+        <input type="text" id="date_consultation" onkeyup="generer()">
+    </div>
+
+    <div id="div_annee" class="champ">
+        <label>Année ou Date de publication :</label>
+        <input type="text" id="annee" placeholder="Ex: 2004 ou 25 septembre 2009" onkeyup="generer()">
+    </div>
+
+    <div id="div_ville" class="champ">
+        <label>Lieu / Ville d'édition ou de production :</label>
+        <input type="text" id="ville" placeholder="Ex: Paris" onkeyup="generer()">
+    </div>
+
+    <div id="div_editeur" class="champ">
+        <label>Éditeur, Producteur ou Lieu de conservation :</label>
+        <input type="text" id="editeur" placeholder="Ex: Éditions de Fallois" onkeyup="generer()">
+    </div>
+
+    <div id="div_pages" class="champ">
+        <label>Pages, Dimensions, ou Durée :</label>
+        <input type="text" id="pages" placeholder="Ex: 216 ou 80,1 cm x 60,5 cm ou 50 min" onkeyup="generer()">
+    </div>
+
+    <div id="div_support" class="champ">
+        <label>Support / Procédé / Type de communication :</label>
+        <input type="text" id="support" placeholder="Ex: DVD, gouache sur toile, conférence inaugurale" onkeyup="generer()">
+    </div>
+
+    <div id="div_autre" class="champ">
+        <label>Autres spécificités (Vol, numéro, destinataire, date diffusion) :</label>
+        <input type="text" id="autre" placeholder="Ex: vol. 216, no 3" onkeyup="generer()">
+    </div>
+
+    <hr>
+    <h2>Résultat :</h2>
+    <p id="resultat"></p>
+</body>
+</html>
